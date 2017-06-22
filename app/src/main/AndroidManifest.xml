@@ -16,6 +16,10 @@
             </intent-filter>
         </activity>
         <activity android:name=".base.BaseProgressTest"/>
+        <activity android:name=".nested.ViewPagerInnerScrollViewTest"/>
+        <activity android:name=".nested.ScrollViewInnerViewPagerTest"/>
+        <activity android:name=".nested.ViewPagerInnerViewPagerTest"/>
+        <activity android:name=".nested.ViewPagerInnerListViewTest"/>
     </application>
 
 </manifest>

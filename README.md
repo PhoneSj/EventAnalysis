@@ -98,9 +98,8 @@ Android中事件传递使用的是**责任链模式**。
 
 ### dispatchTouchEvent方法
 
-
-```
-public boolean dispatchTouchEvent(MotionEvent event) {
+<pre><code>
+    public boolean dispatchTouchEvent(MotionEvent event) {
         // If the event should be handled by accessibility focus first.
         if (event.isTargetAccessibilityFocus()) {
             // We don't have focus or no virtual descendant has it, do not handle the event.
@@ -155,16 +154,22 @@ public boolean dispatchTouchEvent(MotionEvent event) {
 		//若result为true，那么该View后者子View会消费事件
         return result;
     }
-```
+</code></pre>
 由以上代码可知：
 * OnTouchListener在onTouchEvent之前执行
 * OnTouchListener返回true时，表示当前View或者其子View为TargeView，后面的onTouchEvent不会执行。
 
 ### onTouchEvent
 
-
-```
+<pre><code>
 public boolean onTouchEvent(MotionEvent event) {
+    ...
+    if (mTouchDelegate != null) {
+        if (mTouchDelegate.onTouchEvent(event)) {
+            return true;
+        }
+    }
+
     ...
     if (mPerformClick == null) {
         mPerformClick = new PerformClick();
@@ -174,8 +179,9 @@ public boolean onTouchEvent(MotionEvent event) {
         performClick();
     }
     ...
-```
+</code></pre>
 由上面代码可知：
+* 事件先会交给外界设置的代理mTouchEvent处理，若mTouchEvent处理，则事件被代理消费，该View为TargetView，代码不在往下执行。
 * 点击事件响应performClick方法时在onTouchEvent中调用的
 * 所以触摸监听器OnTouchEvent在点击监听器OnClick之前执行
 
@@ -188,7 +194,8 @@ public boolean onTouchEvent(MotionEvent event) {
 ### dispatchTouchEvent
 
 #### 第一部分
-```
+
+<pre><code>
 public boolean dispatchTouchEvent(MotionEvent ev){
     ...
             //检查是否拦截
@@ -210,15 +217,14 @@ public boolean dispatchTouchEvent(MotionEvent ev){
             }
     ...
 }
-```
+</code></pre>
 功能：
 * 子控件是否请求了不要拦截事件
 * 判断是否需要拦截事件
 
 #### 第二部分
 
-
-```
+<pre><code>
     ...
             //每次处理事件之前将目标控件链表置空
             TouchTarget newTouchTarget = null;
@@ -309,7 +315,7 @@ public boolean dispatchTouchEvent(MotionEvent ev){
                     }
                 }
     ...
-```
+</code></pre>
 
 功能：查找消费事件的子View，过程如下：
 * 先清空上次的TargetView；
@@ -322,8 +328,8 @@ public boolean dispatchTouchEvent(MotionEvent ev){
 #### 第三部分
 
 
-```
-// Dispatch to touch targets.
+<pre><code>
+            // Dispatch to touch targets.
             if (mFirstTouchTarget == null) {
 				//没有找到消费该事件的子控件，那么将当前控件作为目标控件，并将事件传递给自己调用super.dispatchTouchEvent
                 // No touch targets so treat this as an ordinary view.
@@ -363,4 +369,134 @@ public boolean dispatchTouchEvent(MotionEvent ev){
                     target = next;
                 }
             }
-```
+</code></pre>
+
+功能：
+* 判断TargetView是否等于null
+* - 若TargetView==null，那么事件交由自己，并调用super.dispatchTouchEvent方法，判断自己是否消费；
+* - 若TargetView!=null，那么事件交由该子View，并调用child.dispatchTouchEvent方法，判断子View是否消费。
+在dispatchTouchEvent方法中调用了dispatchTransformedTouchEvent(...)方法
+
+<pre><code>
+    private boolean dispatchTransformedTouchEvent(MotionEvent event, boolean cancel,View child, int desiredPointerIdBits) {
+    ...
+                if (child == null) {
+					//TargetView为null，即所有子控件都不消费事件，则事件给自己，判断自己是否消费。
+                    handled = super.dispatchTouchEvent(event);
+                } else {
+                    final float offsetX = mScrollX - child.mLeft;
+                    final float offsetY = mScrollY - child.mTop;
+                    event.offsetLocation(offsetX, offsetY);
+					//TargetView不为null，即有子控件消费事件，则事假给该子控件，判断该子控件是否消费。
+                    handled = child.dispatchTouchEvent(event);
+
+                    event.offsetLocation(-offsetX, -offsetY);
+                }
+                return handled;
+    ...
+    }
+</code></pre>
+
+综上源码分析：
+* 父View与子View之间的事件是通过dispatchTouchEvent(...)方法来传递的；
+* onInterceptTouchEvent(...)方法和onTouchEvent(...)方法属于该View的内部方法，其他控件并不会调用；
+* onInterceptTouchEvent(...)方法和onTouchEvent(...)方法都是在dispatchTouchEvent(...)方法内调用的；
+* onTouchEvent(...)方法的返回值都是通过dispatchTouchEvent(...)方法返回的，（这也就解释了为什么只有onTouchEvent和dispatchTouchEvent两个方法可以确定TargetView，其实归根结底都是dispatchTouchEvent来确定TargetView的）。
+
+
+
+## 常用滑动控件分析
+
+### 默认状态下的处理情况
+ScrollView/ HorizontalScrollView
+		处理所有事件
+		Action_Down:不拦截
+		Action_Move:当竖向滑动距离大于某个值时，拦截
+ListView
+处理所有事件
+Action_Down:不拦截、但处理
+		Action_Move:当竖向滑动距离大于某个值时，拦截
+ViewPager
+		处理所有事件
+		Action_Down:不拦截
+		Action_Move:当横向滑动距离大于某个值时，拦截
+		
+以上滑动容器都不能设置onClickListener后者设置了也不响应，因为在它们的onTouchEvent中没有调用super.onTouchEvent（在View的onTouchEvent方法中才执行点击回调）。
+
+### 常见嵌套问题的处理
+
+#### ScrollView中嵌入ListView
+
+**问题**：只能响应ScrollView的滑动，ListView滑动不响应
+
+**Down事件**：ScrollView、ListView都不拦截，事件在ListView的onTouchEvent消费掉，此时目标控件为ListView
+
+**Move事件**：ScrollView判断滑动距离大于mTouchSlop时，拦截，此时目标控件为ScrollView，后续所有的事件都不经过ListView
+所有表现为ScrollView处理所有的move事件，即ScrollView能滑动，ListView不能滑动
+
+**方法**
+
+1. ScrollView的onInterceptTouchEvent返回false
+2. B．	ListView的onTouchEvent中调用parent.requestDisallowIntercept是ScrollView不拦截
+3. C．	将ListView实现onTouchListener接口，并设置给ScrollView，事件每次传递给ScrollView时，都会在onTouchEvent之前执行onTouch方法，我们就是在onTouch方法中处理ListView的滑动
+
+#### ListView中嵌入HorizontalScrollView/ViewPager
+
+**问题**：因内外控件滑动方向不一致，原生控件不产生冲突，但是当需要ListView的OnItemClickListener时，该监听器无效
+
+**原因**：HorizontalScrollView、ViewPager中消费掉了down事件，ListView获取到down事件并进行消费。
+
+**尝试解决的方法**：
+
+1．在HorizontalScrollView、ViewPager的OnClickListner中调用ListView的OnItemClickListener，结果失败
+原因：HorizontalScrollView、ViewPager的onTouchEvent中并没有调用View的onClick方法，故这两个控件没有点击事件（设置了也无效
+
+#### ListView中的item为SwipeLayout(一个自定义的水平滑动控件)
+
+**问题**：同样是ListView的onItemClickListener无法响应
+
+**方法**
+
+1. 丢弃原有的事件传递，我们将事件全部拦截在ListView中，再SwipeLayout中自定义一个方法（如：onSiwpe（MotionEvent）），将事件传递给SwipeLayout，这样事件在ListView和SwipeLayout中都可以进行各自的消费（即利用两次）
+2. SwipeLayout不消费任何事件,并将SwipeLayout的左右移动交给ListView处理，ListView使用scrollTo、scrollBy移动SwipeLayout
+3. 给SwipeLayout设置OnClickListener，并在onClick中回调OnItemClickListener(即利用SwipeLayout来响应ListView的接口)
+
+#### 伪代码
+* ViewGroup的伪代码
+<pre><code>
+	dispatchTouchEvent(event){
+		If(!disallowIntercept){
+			interceptTouchEvent();-------------------------------调用拦截方法
+	}
+	…
+	for(倒序遍历所有子控件){
+		if(当前时间的坐标在该子控件范围内){
+			mTargetView=该子控件;
+			break;
+	}
+	}
+	…
+	If(mTargetView==null){
+		handle=Super.dispatchTouchEvent();--------------调用父类的分发，即View的分发事件
+	}else{
+		handle=mTargetView.dispatchTouchEvnet();----调用子控件的分发
+	}
+	…
+	onTouchEvent();
+	return handle;------------------------------------------------此处的返回值会影响目标控件的确定
+	}
+
+</code></pre>
+* View的伪代码
+<pre><code>
+	dispatchTouchEvent(event){
+		if(设置OnTouchListener并且消费事件){
+			reslut=true;
+	}
+	if(!reslut&&onTouchEvent()){-----------------------调用onTouchEvent方法，消费则结果为true
+		reslut=true
+	}
+	return result;--------------------------------------------此处的返回值会影响目标控件的确定
+	}
+
+</code></pre>

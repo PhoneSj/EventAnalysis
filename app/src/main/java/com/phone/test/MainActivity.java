@@ -8,10 +8,18 @@ import android.widget.ArrayAdapter;
 import android.widget.ListView;
 
 import com.phone.test.base.BaseProgressTest;
+import com.phone.test.nested.ScrollViewInnerViewPagerTest;
+import com.phone.test.nested.ViewPagerInnerListViewTest;
+import com.phone.test.nested.ViewPagerInnerScrollViewTest;
+import com.phone.test.nested.ViewPagerInnerViewPagerTest;
 
 public class MainActivity extends ListActivity {
 
-    private String titles[]={"基本传递流程","clock","bezier","ball","loading","float","test"};
+    private String titles[]={"基本传递流程","ViewPager嵌入到ScrollView中","ScrollView嵌入到ViewPager中",
+            "ViewPager嵌入到ViewPager中",
+            "ViewPager嵌入到ListView中",
+            "float",
+            "test"};
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -28,18 +36,18 @@ public class MainActivity extends ListActivity {
             case 0:
                     intent=new Intent(this, BaseProgressTest.class);
                 break;
-//            case 1:
-//                intent=new Intent(this, ClockTest.class);
-//                break;
-//            case 2:
-//                intent=new Intent(this, BezierTest.class);
-//                break;
-//            case 3:
-//                intent=new Intent(this, BallTest.class);
-//                break;
-//            case 4:
-//                intent=new Intent(this, LoadingTest.class);
-//                break;
+            case 1:
+                intent=new Intent(this, ViewPagerInnerScrollViewTest.class);
+                break;
+            case 2:
+                intent=new Intent(this, ScrollViewInnerViewPagerTest.class);
+                break;
+            case 3:
+                intent=new Intent(this, ViewPagerInnerViewPagerTest.class);
+                break;
+            case 4:
+                intent=new Intent(this, ViewPagerInnerListViewTest.class);
+                break;
 //            case 5:
 //                intent=new Intent(this, FloatText.class);
 //                break;
